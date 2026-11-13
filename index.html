@@ -49,11 +49,39 @@ nav button.on{color:var(--ac);font-weight:600}
 .sheet>div{background:var(--card);width:100%;max-width:640px;max-height:92vh;overflow:auto;border-radius:18px 18px 0 0;padding:16px 16px calc(16px + env(safe-area-inset-bottom))}
 table{width:100%;border-collapse:collapse;font-size:14px}
 td{padding:5px 0;border-bottom:1px solid var(--bd)}td:last-child{text-align:right}
-.hidden{display:none}
+.hidden{display:none!important}
 .pill{display:flex;gap:6px;overflow:auto;margin:8px 0}
 .pill button{white-space:nowrap;padding:6px 10px;font-size:13px}
 .warnbox{background:#fef3c7;color:#422006;border-radius:10px;padding:10px;font-size:13px;margin-top:8px}
 svg text{fill:var(--mu);font-size:10px}
+nav .kbd{display:none}
+@media(hover:hover){.tap:hover{background:var(--ac2);border-radius:8px}button:hover{filter:brightness(1.08)}nav button:hover{color:var(--ac)}}
+/* ---------- PC / pantallas anchas ---------- */
+@media(min-width:900px){
+  body{padding-bottom:0;padding-left:210px}
+  header{padding-left:24px}
+  nav{top:0;bottom:0;right:auto;width:210px;flex-direction:column;border-top:0;border-right:1px solid var(--bd);padding:calc(70px + env(safe-area-inset-top)) 10px 10px;gap:4px;z-index:4}
+  nav button{flex:none;display:flex;align-items:center;gap:12px;padding:12px 14px;border-radius:10px;font-size:15px;text-align:left}
+  nav button b{display:inline;font-size:20px;width:24px;text-align:center}
+  nav button.on{background:var(--ac2)}
+  nav .kbd{display:inline;margin-left:auto;font-size:11px;color:var(--mu);border:1px solid var(--bd);border-radius:5px;padding:1px 6px;font-weight:400}
+  main{max-width:1150px;padding:20px 24px}
+  #v-hoy,#v-peso,#v-perfil{display:grid;grid-template-columns:minmax(330px,400px) 1fr;gap:0 16px;align-items:start}
+  #v-hoy>.card:first-child{grid-column:1;grid-row:1}
+  #v-hoy>#dayExtra{grid-column:1;grid-row:2}
+  #v-hoy>#meals{grid-column:2;grid-row:1/span 3;display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:0 12px;align-items:start}
+  #v-peso>.card:nth-child(1){grid-column:1;grid-row:1}
+  #v-peso>.card:nth-child(3){grid-column:1;grid-row:2}
+  #v-peso>.card:nth-child(2){grid-column:2;grid-row:1/span 2}
+  #v-perfil{grid-template-columns:1fr 1fr}
+  #v-perfil>.card:nth-child(1){grid-column:1;grid-row:1/span 3}
+  #v-perfil>.card:nth-child(n+2){grid-column:2}
+  #v-add .card{max-width:820px}
+  #results .item{padding:10px 8px}
+  .sheet{align-items:center}
+  .sheet>div{border-radius:18px;max-width:560px;max-height:88vh}
+  .big{font-size:40px}
+}
 </style>
 </head>
 <body>
@@ -146,10 +174,10 @@ svg text{fill:var(--mu);font-size:10px}
 </main>
 
 <nav>
-  <button data-v="hoy" onclick="go('hoy')" class="on"><b>◔</b>Hoy</button>
-  <button data-v="add" onclick="go('add')"><b>＋</b>Añadir</button>
-  <button data-v="peso" onclick="go('peso')"><b>⚖</b>Peso</button>
-  <button data-v="perfil" onclick="go('perfil')"><b>☺</b>Perfil</button>
+  <button data-v="hoy" onclick="go('hoy')" class="on"><b>◔</b>Hoy<span class="kbd">H</span></button>
+  <button data-v="add" onclick="go('add')"><b>＋</b>Añadir<span class="kbd">A</span></button>
+  <button data-v="peso" onclick="go('peso')"><b>⚖</b>Peso<span class="kbd">P</span></button>
+  <button data-v="perfil" onclick="go('perfil')"><b>☺</b>Perfil<span class="kbd">F</span></button>
 </nav>
 <div id="sheet" class="sheet hidden" onclick="if(event.target===this)closeSheet()"><div id="sheetIn"></div></div>
 
@@ -296,6 +324,7 @@ function copyPrevDay(){
 // ---------- AÑADIR ----------
 function setAddTab(t){addTab=t;renderAdd()}
 function renderAdd(){
+  if(matchMedia('(min-width:900px)').matches&&document.activeElement!==$('q')&&$('sheet').classList.contains('hidden'))setTimeout(()=>$('q').focus(),0);
   const q=$('q').value.trim();
   if(q&&addTab!=='res'&&addTab!=='mine')addTab='res';
   if(!q&&addTab==='res')addTab=S.recent.length?'rec':'mine';
@@ -336,6 +365,7 @@ function openFood(id,editIdx){
     <tr><td>Sodio</td><td class="num">${n.na!=null?r0(n.na)+' mg':'—'}</td></tr></table>`};
   $('fq').oninput=upd;$('fu').onchange=upd;upd();
   $('sheet').classList.remove('hidden');
+  if(matchMedia('(hover:hover)').matches)$('fq').select();
 }
 function commitFood(id,editIdx){
   const f=food(id),qty=+$('fq').value,unit=+$('fu').value,g=qty*unit;
@@ -449,6 +479,19 @@ function importData(inp){
 }
 
 if('serviceWorker' in navigator&&location.protocol.startsWith('http'))navigator.serviceWorker.register('sw.js').catch(()=>{});
+// atajos de teclado (PC)
+document.addEventListener('keydown',e=>{
+  const sheetOpen=!$('sheet').classList.contains('hidden'), typing=/^(INPUT|SELECT|TEXTAREA)$/.test(e.target.tagName);
+  if(e.key==='Escape'&&sheetOpen){closeSheet();return}
+  if(sheetOpen&&e.key==='Enter'&&e.target.id==='fq'){e.preventDefault();$('sheet').querySelector('button.grow:not(.sec)').click();return}
+  if(e.key==='Enter'&&e.target.id==='q'){const f=$('results').querySelector('.item.tap');if(f){e.preventDefault();f.click()}return}
+  if(typing||sheetOpen||e.ctrlKey||e.metaKey||e.altKey)return;
+  const k=e.key.toLowerCase();
+  if(k==='/'||k==='a'){e.preventDefault();go('add');$('q').focus()}
+  else if(k==='h')go('hoy');else if(k==='p')go('peso');else if(k==='f')go('perfil');
+  else if(k==='arrowleft'&&!$('v-hoy').classList.contains('hidden'))shiftDay(-1);
+  else if(k==='arrowright'&&!$('v-hoy').classList.contains('hidden'))shiftDay(1);
+});
 go(S.profile?'hoy':'perfil');
 </script>
 </body>

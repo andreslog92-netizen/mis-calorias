@@ -15,6 +15,10 @@ App web (PWA) para contar calorías y macros, en español, con la base oficial *
 Súbelo a un hosting HTTPS gratis (GitHub Pages, Netlify Drop, Cloudflare Pages), abre la URL en el móvil y elige
 "Añadir a pantalla de inicio". Los datos se guardan solo en tu dispositivo: usa Perfil → Exportar como copia de seguridad.
 
+## En el PC
+Abre la URL en Chrome o Edge y pulsa el icono de instalar en la barra de direcciones para tenerla como app de escritorio.
+Atajos: `A` o `/` añadir (buscar), `Enter` elige el primer resultado y confirma, `Esc` cierra, `H` hoy, `P` peso, `F` perfil, `←/→` cambiar de día.
+
 ## Cálculos
 - BMR: Mifflin-St Jeor. TDEE = BMR × factor de actividad.
 - Objetivo: TDEE ± (kg/semana × 7700 / 7). Mínimo 1500 kcal (hombre) / 1200 kcal (mujer).
