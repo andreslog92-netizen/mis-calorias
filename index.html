@@ -544,7 +544,12 @@ function importData(inp){
   r.readAsText(inp.files[0]);inp.value='';
 }
 
-if('serviceWorker' in navigator&&location.protocol.startsWith('http'))navigator.serviceWorker.register('sw.js').catch(()=>{});
+if('serviceWorker' in navigator&&location.protocol.startsWith('http')){
+  // cuando se instala una versión nueva de la app, recargar una vez para mostrarla
+  const hadCtrl=!!navigator.serviceWorker.controller;let reloaded=false;
+  navigator.serviceWorker.addEventListener('controllerchange',()=>{if(hadCtrl&&!reloaded){reloaded=true;location.reload()}});
+  navigator.serviceWorker.register('sw.js',{updateViaCache:'none'}).then(r=>r.update()).catch(()=>{});
+}
 // atajos de teclado (PC)
 document.addEventListener('keydown',e=>{
   const sheetOpen=!$('sheet').classList.contains('hidden'), typing=/^(INPUT|SELECT|TEXTAREA)$/.test(e.target.tagName);
