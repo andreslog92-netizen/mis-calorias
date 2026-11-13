@@ -404,22 +404,26 @@ async function ocrRun(file){
   const STEP={'loading tesseract core':'Cargando lector','initializing tesseract':'Preparando lector','loading language traineddata':'Cargando idioma español','initializing api':'Preparando lector','recognizing text':'Leyendo la etiqueta'};
   msg.innerHTML='<div class="mu" style="margin-top:8px" id="ocrSt">Preparando… (la primera vez descarga el lector, ~10 MB)</div><div class="prog"><i id="ocrBar"></i></div>';
   try{
-    const res=await LabelOCR.readLabel(file,m=>{const st=$('ocrSt'),b=$('ocrBar');if(!st)return;st.textContent=(STEP[m.status]||m.status)+'…';if(b)b.style.width=Math.round((m.progress||0)*100)+'%'});
+    const res=await LabelOCR.readLabel(file,m=>{const st=$('ocrSt'),b=$('ocrBar');if(!st)return;if(m.status==='pass'){st.textContent=`Leyendo la etiqueta (intento ${m.pass} de ${m.total})…`;if(b)b.style.width=Math.round(m.progress*100)+'%';return}if(m.status==='recognizing text')return;st.textContent=(STEP[m.status]||m.status)+'…';if(b)b.style.width=Math.round((m.progress||0)*100)+'%'});
     const v=res.values, F={k:'ck',p:'cp',c:'cc',su:'csu',f:'cf',sf:'csf',fi:'cfi',salt:'csal'};
     let n=0;
     const NAMES={k:'energía',p:'proteína',c:'carbohidratos',su:'azúcares',f:'grasa',sf:'saturadas',fi:'fibra',salt:'sal'};
+    const unreliable=res.score<50||!!res.small;
     const bad=new Set([...v.fixed.map(x=>x[0]),...v.suspect]);
-    for(const k in F){const el=$(F[k]);el.classList.remove('ocrfill','ocrwarn');if(v[k]!=null){el.value=Math.round(v[k]*100)/100;n++;el.classList.add(bad.has(k)?'ocrwarn':'ocrfill')}else el.classList.add('ocrwarn')}
+    for(const k in F){const el=$(F[k]);el.classList.remove('ocrfill','ocrwarn');if(v[k]!=null){el.value=Math.round(v[k]*100)/100;n++;el.classList.add(unreliable||bad.has(k)?'ocrwarn':'ocrfill')}else el.classList.add('ocrwarn')}
     if(v.serving&&!$('cs').value){$('cs').value=v.serving;$('cs').classList.add('ocrfill')}
     const notes=[];
-    if(v.converted)notes.push(`La etiqueta da valores <b>por ración (${v.serving} g)</b>; los he convertido a por 100 g.`);
+    if(unreliable&&n)notes.unshift('<b>Lectura poco fiable</b>: muchos números no cuadran entre sí. Revisa todos los valores con la etiqueta o haz otra foto más nítida.');
+    if(res.small)notes.unshift(`La imagen es muy pequeña (${res.small[0]}×${res.small[1]} píxeles) y los números no se distinguen bien. Usa una <b>foto hecha con la cámara</b>, de cerca, en vez de una captura o una imagen descargada.`);
+    if(v.fromServingCol)notes.push(`La columna "por 100 mL" es del producto <b>preparado</b>. He usado la columna <b>por porción (${v.serving} g)</b> y la he pasado a 100 g, para que registres el producto en gramos (por ejemplo, 30 g = 1 cacito).`);
+    else if(v.converted)notes.push(`La etiqueta da valores <b>por ración (${v.serving} g)</b>; los he convertido a por 100 g.`);
     else if(v.perServing)notes.push('La etiqueta parece dar valores <b>por ración</b> y no encuentro su peso en gramos: revisa y convierte a 100 g.');
     else if(!v.per100)notes.push('No veo "100 g" en la foto: comprueba que los valores son <b>por 100 g</b> y no por ración.');
     for(const [k,a,b] of v.fixed)notes.push(`En <b>${NAMES[k]}</b> leí "${a}" pero no cuadra con las kcal; he puesto <b>${(Math.round(b*100)/100).toLocaleString('es')}</b>. Compruébalo.`);
     if(v.mismatch)notes.push(`Los valores leídos no cuadran: con esos macros saldrían ~${v.mismatch} kcal y la etiqueta dice ${v.k}. Revisa sobre todo los campos en naranja y la proteína, la grasa y los carbohidratos.`);
     if(v.fromKJ)notes.push('Solo encontré kJ; he calculado las kcal (kJ ÷ 4,184).');
     if(v.k==null)notes.push('No pude leer la energía (kcal): escríbela a mano.');
-    msg.innerHTML=`<div class="${n>=5&&v.k!=null?'':'warnbox'}" style="margin-top:8px;font-size:13px">${n?`✔ He leído <b>${n} de 8</b> valores (verde = leído; naranja = no leído o dudoso).`:'No he podido leer valores en la foto.'} <b>Compáralos con la etiqueta antes de guardar</b>: el lector puede confundir algún número.${n<5?' Prueba con una foto más cercana, recta y sin reflejos.':''}</div>
+    msg.innerHTML=`<div class="${n>=5&&v.k!=null&&!unreliable?'':'warnbox'}" style="margin-top:8px;font-size:13px">${n?`✔ He leído <b>${n} de 8</b> valores (verde = leído; naranja = no leído o dudoso).`:'No he podido leer valores en la foto.'} <b>Compáralos con la etiqueta antes de guardar</b>: el lector puede confundir algún número.${n<5?' Prueba con una foto más cercana, recta y sin reflejos.':''}</div>
       ${notes.map(x=>`<div class="warnbox">${x}</div>`).join('')}
       <details><summary>Ver texto leído</summary><pre>${esc(res.text)}</pre></details>`;
     if(!$('cn').value)$('cn').focus();
