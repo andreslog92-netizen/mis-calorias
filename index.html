@@ -349,18 +349,19 @@ let doSearchT;function doSearch(){clearTimeout(doSearchT);doSearchT=setTimeout((
 function openFood(id,editIdx){
   const f=food(id), editing=editIdx!=null, e=editing?S.log[day][editIdx]:null;
   const units=[[1,'g']].concat((f.s||[]).map(s=>[s[0],s[1]+` (${s[0]} g)`]));
+  const defSrv=!e&&f.id[0]==='c'&&f.s&&f.s.length;
   const fav=S.favs.includes(id);
   const nowH=new Date().getHours();
   const defMeal=e?e.meal:addMeal||(nowH<11?'des':nowH<16?'com':nowH<19?'mer':'cen');
   const src=f.id[0]==='c'?'<span class="badge warn">Personal · datos de etiqueta</span>':`<span class="badge">✔ USDA SR28 · NDB #${f.id}</span>`;
   $('sheetIn').innerHTML=`<div class="row"><h2 class="grow" style="margin:0">${esc(fname(f))}</h2><button class="ghost" onclick="toggleFav('${id}')" style="font-size:22px;color:var(--c)">${fav?'★':'☆'}</button></div>
   ${f.es&&f.en?`<div class="mu">${esc(f.en)}</div>`:''}<div style="margin:6px 0">${src}</div>
-  <div class="grid2"><div><label>Cantidad</label><input id="fq" type="number" inputmode="decimal" step="any" value="${e?e.qty:100}"></div>
-  <div><label>Unidad</label><select id="fu">${units.map((u,i)=>`<option value="${u[0]}" ${e&&e.unit==u[0]?'selected':''}>${esc(u[1])}</option>`).join('')}</select></div></div>
+  <div class="grid2"><div><label>Cantidad</label><input id="fq" type="number" inputmode="decimal" step="any" value="${e?e.qty:defSrv?1:100}"></div>
+  <div><label>Unidad</label><select id="fu">${units.map((u,i)=>`<option value="${u[0]}" ${(e?e.unit==u[0]:defSrv&&i===1)?'selected':''}>${esc(u[1])}</option>`).join('')}</select></div></div>
   <label>Comida</label><select id="fm">${MEALS.map(([m,l])=>`<option value="${m}" ${m===defMeal?'selected':''}>${l}</option>`).join('')}</select>
   <div id="fprev" style="margin-top:12px"></div>
   <div class="row" style="margin-top:12px"><button class="sec grow" onclick="closeSheet()">Cancelar</button><button class="grow" onclick="commitFood('${id}',${editing?editIdx:'null'})">${editing?'Guardar':'Añadir'}</button></div>
-  ${f.id[0]==='c'?`<button class="ghost" style="color:var(--bad);margin-top:8px" onclick="delCustom('${id}')">Eliminar este alimento personal</button>`:''}`;
+  ${f.id[0]==='c'?`<div class="row" style="margin-top:8px"><button class="ghost" onclick="customForm(false,'${id}')">✎ Editar alimento</button><span class="grow"></span><button class="ghost" style="color:var(--bad)" onclick="delCustom('${id}')">Eliminar</button></div>`:''}`;
   const upd=()=>{const g=+$('fq').value*+$('fu').value,n=nutr(f,g);
     $('fprev').innerHTML=`<table><tr><td><b>Energía</b></td><td class="num"><b>${r0(n.k||0)} kcal</b></td></tr><tr><td>Peso total</td><td class="num">${r1(g)} g</td></tr>
     <tr><td>Proteína</td><td class="num">${r1(n.p||0)} g</td></tr><tr><td>Carbohidratos</td><td class="num">${r1(n.c||0)} g</td></tr>
@@ -383,21 +384,40 @@ function commitFood(id,editIdx){
 function openEntry(i){const e=S.log[day][i];if(food(e.fid))openFood(e.fid,i);else alert('Este alimento ya no existe en tu lista personal.')}
 function toggleFav(id){S.favs=S.favs.includes(id)?S.favs.filter(x=>x!==id):[id].concat(S.favs);save();openFood(id)}
 function closeSheet(){$('sheet').classList.add('hidden')}
-function customForm(scan){
-  $('sheetIn').innerHTML=`<h2>Nuevo alimento (por 100 g)</h2><div class="mu">Haz una foto a la tabla nutricional o copia a mano los valores "por 100 g".</div>
+function customForm(scan,editId){
+  const E=editId?S.custom.find(c=>c.id===editId):null, sv=E&&E.s&&E.s[0];
+  $('sheetIn').innerHTML=`<h2>${E?'Editar alimento':'Nuevo alimento'}</h2><div class="mu">Copia los valores de la etiqueta tal como vienen (por 100 g o por porción) o rellénalos con una foto.</div>
   <button class="sec" style="width:100%;margin-top:10px" onclick="$('ocrFile').click()">📷 Rellenar desde foto de la etiqueta</button>
   <input type="file" id="ocrFile" accept="image/*" class="hidden" onchange="if(this.files[0])ocrRun(this.files[0]);this.value=''">
   <div id="ocrMsg"></div>
-  <label>Nombre</label><input id="cn" placeholder="Ej: Yogur proteico marca X">
+  <label>Nombre</label><input id="cn" placeholder="Ej: Proteína en polvo marca X">
+  <label>Los valores que copio de la etiqueta son</label>
+  <select id="cmode" onchange="customMode()"><option value="100">Por 100 g</option><option value="srv">Por porción (cacito, barrita, galleta…)</option></select>
+  <div class="grid2"><div><label id="csLbl">Ración típica (g, opcional)</label><input id="cs" type="number" step="any" inputmode="decimal" oninput="customMode()"></div>
+  <div><label>Nombre de la porción</label><input id="csn" placeholder="cacito, barrita…" oninput="customMode()"></div></div>
+  <div id="cmodeInfo" class="mu" style="margin-top:6px"></div>
   <div class="grid2"><div><label>Energía (kcal)</label><input id="ck" type="number" step="any" inputmode="decimal"></div><div><label>Proteína (g)</label><input id="cp" type="number" step="any" inputmode="decimal"></div>
   <div><label>Carbohidratos (g)</label><input id="cc" type="number" step="any" inputmode="decimal"></div><div><label>de los cuales azúcares (g)</label><input id="csu" type="number" step="any" inputmode="decimal"></div>
   <div><label>Grasa (g)</label><input id="cf" type="number" step="any" inputmode="decimal"></div><div><label>de las cuales saturadas (g)</label><input id="csf" type="number" step="any" inputmode="decimal"></div>
   <div><label>Fibra (g)</label><input id="cfi" type="number" step="any" inputmode="decimal"></div><div><label>Sal (g)</label><input id="csal" type="number" step="any" inputmode="decimal"></div>
-  <div><label>Ración típica (g, opcional)</label><input id="cs" type="number" step="any" inputmode="decimal"></div></div>
+  </div>
   <div id="cwarn"></div>
-  <div class="row" style="margin-top:12px"><button class="sec grow" onclick="closeSheet()">Cancelar</button><button class="grow" onclick="saveCustom()">Guardar</button></div>`;
+  <div class="row" style="margin-top:12px"><button class="sec grow" onclick="closeSheet()">Cancelar</button><button class="grow" onclick="saveCustom(${E?`'${E.id}'`:''})">Guardar</button></div>`;
+  if(E){ // al editar se muestran los valores por 100 g guardados
+    const set=(id,x)=>{if(x!=null)$(id).value=Math.round(x*100)/100};
+    $('cn').value=E.es;set('ck',E.k);set('cp',E.p);set('cc',E.c);set('csu',E.su);set('cf',E.f);set('csf',E.sf);set('cfi',E.fi);if(E.na!=null)set('csal',E.na/400);
+    if(sv){$('cs').value=sv[0];$('csn').value=sv[1]}
+  }
+  customMode();
   $('sheet').classList.remove('hidden');
   if(scan)$('ocrFile').click();
+}
+function customMode(){
+  const srv=$('cmode').value==='srv', g=+$('cs').value, nm=$('csn').value.trim()||'porción';
+  $('csLbl').textContent=srv?'Tamaño de la porción (g) *':'Ración típica (g, opcional)';
+  document.querySelectorAll('#sheetIn .grid2 label').forEach(l=>{if(/\((g|kcal)\)/.test(l.textContent)&&l.id!=='csLbl'){l.textContent=l.textContent.replace(/ (por porción|por 100 g)$/,'')+(srv?' por porción':'')}});
+  $('cmodeInfo').innerHTML=srv?(g>0?`La app guardará los valores pasados a 100 g (×${(Math.round(100/g*100)/100).toLocaleString("es")}). Al registrarlo podrás elegir "${esc(nm)} (${g} g)" y poner 1, 1,5, 2…`:'Indica cuántos gramos tiene una porción (lo pone la etiqueta, p. ej. "Porción: 30 g").')
+    :(g>0?`Al registrarlo podrás elegir gramos o "${esc(nm)} (${g} g)".`:'');
 }
 async function ocrRun(file){
   const msg=$('ocrMsg');
@@ -405,6 +425,7 @@ async function ocrRun(file){
   msg.innerHTML='<div class="mu" style="margin-top:8px" id="ocrSt">Preparando… (la primera vez descarga el lector, ~10 MB)</div><div class="prog"><i id="ocrBar"></i></div>';
   try{
     const res=await LabelOCR.readLabel(file,m=>{const st=$('ocrSt'),b=$('ocrBar');if(!st)return;if(m.status==='pass'){st.textContent=`Leyendo la etiqueta (intento ${m.pass} de ${m.total})…`;if(b)b.style.width=Math.round(m.progress*100)+'%';return}if(m.status==='recognizing text')return;st.textContent=(STEP[m.status]||m.status)+'…';if(b)b.style.width=Math.round((m.progress||0)*100)+'%'});
+    $('cmode').value='100';
     const v=res.values, F={k:'ck',p:'cp',c:'cc',su:'csu',f:'cf',sf:'csf',fi:'cfi',salt:'csal'};
     let n=0;
     const NAMES={k:'energía',p:'proteína',c:'carbohidratos',su:'azúcares',f:'grasa',sf:'saturadas',fi:'fibra',salt:'sal'};
@@ -412,6 +433,7 @@ async function ocrRun(file){
     const bad=new Set([...v.fixed.map(x=>x[0]),...v.suspect]);
     for(const k in F){const el=$(F[k]);el.classList.remove('ocrfill','ocrwarn');if(v[k]!=null){el.value=Math.round(v[k]*100)/100;n++;el.classList.add(unreliable||bad.has(k)?'ocrwarn':'ocrfill')}else el.classList.add('ocrwarn')}
     if(v.serving&&!$('cs').value){$('cs').value=v.serving;$('cs').classList.add('ocrfill')}
+    customMode();
     const notes=[];
     if(unreliable&&n)notes.unshift('<b>Lectura poco fiable</b>: muchos números no cuadran entre sí. Revisa todos los valores con la etiqueta o haz otra foto más nítida.');
     if(res.small)notes.unshift(`La imagen es muy pequeña (${res.small[0]}×${res.small[1]} píxeles) y los números no se distinguen bien. Usa una <b>foto hecha con la cámara</b>, de cerca, en vez de una captura o una imagen descargada.`);
@@ -429,9 +451,12 @@ async function ocrRun(file){
     if(!$('cn').value)$('cn').focus();
   }catch(e){msg.innerHTML=`<div class="warnbox">No se pudo leer la foto (${esc(e.message||e)}). Comprueba tu conexión la primera vez que lo uses, o rellena los datos a mano.</div>`}
 }
-function saveCustom(){
-  const v=id=>$(id).value===''?null:+$(id).value, name=$('cn').value.trim();
-  const f={id:'c'+Date.now(),es:name,en:'',k:v('ck'),p:v('cp')||0,c:v('cc')||0,f:v('cf')||0};
+function saveCustom(editId){
+  const srv=$('cmode').value==='srv', sg=+$('cs').value||0;
+  if(srv&&!(sg>0)){alert('Indica el tamaño de la porción en gramos');$('cs').focus();return}
+  const mul=srv?100/sg:1; // todo se guarda por 100 g
+  const v=id=>$(id).value===''?null:Math.round(+$(id).value*mul*100)/100, name=$('cn').value.trim();
+  const f={id:editId||'c'+Date.now(),es:name,en:'',k:v('ck'),p:v('cp')||0,c:v('cc')||0,f:v('cf')||0};
   if(!name||f.k==null){alert('Nombre y energía son obligatorios');return}
   const empty=[['cp','proteína'],['cc','carbohidratos'],['cf','grasa']].filter(([id])=>$(id).value==='').map(x=>x[1]);
   if(empty.length&&!confirm(`Falta: ${empty.join(', ')}. Se guardará como 0 g. ¿Continuar?`))return;
@@ -439,8 +464,9 @@ function saveCustom(){
   if(f.k>30&&Math.abs(est-f.k)/f.k>0.3&&!$('cwarn').dataset.ok){
     $('cwarn').dataset.ok=1;$('cwarn').innerHTML=`<div class="warnbox">Ojo: con esos macros saldrían ~${r0(est)} kcal, pero has puesto ${f.k}. Revisa la etiqueta (¿valores por ración en lugar de por 100 g?). Pulsa Guardar otra vez si está bien.</div>`;return}
   if(v('csu')!=null)f.su=v('csu');if(v('csf')!=null)f.sf=v('csf');if(v('cfi')!=null)f.fi=v('cfi');if(v('csal')!=null)f.na=v('csal')*400;
-  if(v('cs'))f.s=[[v('cs'),'ración']];
-  S.custom.unshift(f);save();closeSheet();addTab='mine';renderAdd();
+  if(sg>0)f.s=[[sg,$('csn').value.trim()||'ración']];
+  if(editId){const i=S.custom.findIndex(c=>c.id===editId);S.custom[i]=f}else S.custom.unshift(f);
+  save();closeSheet();addTab='mine';renderAdd();
 }
 function delCustom(id){if(!confirm('¿Eliminar este alimento? Los registros pasados se conservan.'))return;S.custom=S.custom.filter(c=>c.id!==id);S.favs=S.favs.filter(x=>x!==id);S.recent=S.recent.filter(x=>x!==id);save();closeSheet();renderAdd()}
 
