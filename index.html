@@ -54,6 +54,9 @@ td{padding:5px 0;border-bottom:1px solid var(--bd)}td:last-child{text-align:righ
 .pill button{white-space:nowrap;padding:6px 10px;font-size:13px}
 .warnbox{background:#fef3c7;color:#422006;border-radius:10px;padding:10px;font-size:13px;margin-top:8px}
 svg text{fill:var(--mu);font-size:10px}
+.ocrfill{outline:2px solid var(--ok);outline-offset:-1px}.ocrwarn{outline:2px solid #f59e0b;outline-offset:-1px}
+.prog{height:6px;background:var(--bd);border-radius:4px;overflow:hidden;margin-top:6px}.prog>i{display:block;height:100%;background:var(--ac);width:0;transition:width .2s}
+details{margin-top:8px;font-size:12px}details pre{white-space:pre-wrap;background:var(--bg);padding:8px;border-radius:8px;max-height:200px;overflow:auto}
 nav .kbd{display:none}
 @media(hover:hover){.tap:hover{background:var(--ac2);border-radius:8px}button:hover{filter:brightness(1.08)}nav button:hover{color:var(--ac)}}
 /* ---------- PC / pantallas anchas ---------- */
@@ -182,6 +185,7 @@ nav .kbd{display:none}
 <div id="sheet" class="sheet hidden" onclick="if(event.target===this)closeSheet()"><div id="sheetIn"></div></div>
 
 <script src="foods.js"></script>
+<script src="ocr/label.js"></script>
 <script>
 'use strict';
 const MEALS=[['des','Desayuno'],['com','Comida'],['mer','Merienda'],['cen','Cena'],['snk','Snacks']];
@@ -335,7 +339,7 @@ function renderAdd(){
   else if(addTab==='fav'){list=S.favs.map(food).filter(Boolean);info=list.length?'':'Marca alimentos con ★ para tenerlos aquí.'}
   else{list=S.custom;info='Alimentos que creas tú a partir de una etiqueta nutricional (no verificados por USDA).'}
   $('resInfo').textContent=info;
-  $('results').innerHTML=(addTab==='mine'?`<button class="sec" style="width:100%;margin:8px 0" onclick="customForm()">＋ Crear alimento desde etiqueta</button>`:'')+
+  $('results').innerHTML=(addTab==='mine'?`<div class="row" style="margin:8px 0"><button class="grow" onclick="customForm(true)">📷 Foto de la etiqueta</button><button class="sec grow" onclick="customForm()">✎ Escribir a mano</button></div>`:'')+
     list.map(f=>`<div class="item tap" onclick="openFood('${f.id}')"><div class="grow"><div>${esc(fname(f))} ${f.es&&f.id[0]!=='c'?'<span class="badge">✔</span>':''}</div>
     <div class="mu">${f.id[0]==='c'?'Personal':esc(f.es?f.en:(FOOD_GROUPS[f.g]||''))}</div></div><div class="num" style="text-align:right">${r0(f.k)}<div class="mu">kcal/100g</div></div></div>`).join('')+
     (addTab==='res'&&q&&NOT_IN_DB[norm(q).split(/\s+/)[0]]?`<div class="warnbox">${NOT_IN_DB[norm(q).split(/\s+/)[0]]}</div>`:'')+(addTab==='res'&&q&&!list.length?'<div class="mu" style="padding:10px 0">Sin resultados. Prueba con otra palabra (o en inglés: la base USDA completa está en inglés), o crea el alimento en "Mis alimentos".</div>':'');
@@ -379,8 +383,11 @@ function commitFood(id,editIdx){
 function openEntry(i){const e=S.log[day][i];if(food(e.fid))openFood(e.fid,i);else alert('Este alimento ya no existe en tu lista personal.')}
 function toggleFav(id){S.favs=S.favs.includes(id)?S.favs.filter(x=>x!==id):[id].concat(S.favs);save();openFood(id)}
 function closeSheet(){$('sheet').classList.add('hidden')}
-function customForm(){
-  $('sheetIn').innerHTML=`<h2>Nuevo alimento (por 100 g)</h2><div class="mu">Copia los valores "por 100 g" de la etiqueta del envase.</div>
+function customForm(scan){
+  $('sheetIn').innerHTML=`<h2>Nuevo alimento (por 100 g)</h2><div class="mu">Haz una foto a la tabla nutricional o copia a mano los valores "por 100 g".</div>
+  <button class="sec" style="width:100%;margin-top:10px" onclick="$('ocrFile').click()">📷 Rellenar desde foto de la etiqueta</button>
+  <input type="file" id="ocrFile" accept="image/*" class="hidden" onchange="if(this.files[0])ocrRun(this.files[0]);this.value=''">
+  <div id="ocrMsg"></div>
   <label>Nombre</label><input id="cn" placeholder="Ej: Yogur proteico marca X">
   <div class="grid2"><div><label>Energía (kcal)</label><input id="ck" type="number" step="any" inputmode="decimal"></div><div><label>Proteína (g)</label><input id="cp" type="number" step="any" inputmode="decimal"></div>
   <div><label>Carbohidratos (g)</label><input id="cc" type="number" step="any" inputmode="decimal"></div><div><label>de los cuales azúcares (g)</label><input id="csu" type="number" step="any" inputmode="decimal"></div>
@@ -390,11 +397,40 @@ function customForm(){
   <div id="cwarn"></div>
   <div class="row" style="margin-top:12px"><button class="sec grow" onclick="closeSheet()">Cancelar</button><button class="grow" onclick="saveCustom()">Guardar</button></div>`;
   $('sheet').classList.remove('hidden');
+  if(scan)$('ocrFile').click();
+}
+async function ocrRun(file){
+  const msg=$('ocrMsg');
+  const STEP={'loading tesseract core':'Cargando lector','initializing tesseract':'Preparando lector','loading language traineddata':'Cargando idioma español','initializing api':'Preparando lector','recognizing text':'Leyendo la etiqueta'};
+  msg.innerHTML='<div class="mu" style="margin-top:8px" id="ocrSt">Preparando… (la primera vez descarga el lector, ~10 MB)</div><div class="prog"><i id="ocrBar"></i></div>';
+  try{
+    const res=await LabelOCR.readLabel(file,m=>{const st=$('ocrSt'),b=$('ocrBar');if(!st)return;st.textContent=(STEP[m.status]||m.status)+'…';if(b)b.style.width=Math.round((m.progress||0)*100)+'%'});
+    const v=res.values, F={k:'ck',p:'cp',c:'cc',su:'csu',f:'cf',sf:'csf',fi:'cfi',salt:'csal'};
+    let n=0;
+    const NAMES={k:'energía',p:'proteína',c:'carbohidratos',su:'azúcares',f:'grasa',sf:'saturadas',fi:'fibra',salt:'sal'};
+    const bad=new Set([...v.fixed.map(x=>x[0]),...v.suspect]);
+    for(const k in F){const el=$(F[k]);el.classList.remove('ocrfill','ocrwarn');if(v[k]!=null){el.value=Math.round(v[k]*100)/100;n++;el.classList.add(bad.has(k)?'ocrwarn':'ocrfill')}else el.classList.add('ocrwarn')}
+    if(v.serving&&!$('cs').value){$('cs').value=v.serving;$('cs').classList.add('ocrfill')}
+    const notes=[];
+    if(v.converted)notes.push(`La etiqueta da valores <b>por ración (${v.serving} g)</b>; los he convertido a por 100 g.`);
+    else if(v.perServing)notes.push('La etiqueta parece dar valores <b>por ración</b> y no encuentro su peso en gramos: revisa y convierte a 100 g.');
+    else if(!v.per100)notes.push('No veo "100 g" en la foto: comprueba que los valores son <b>por 100 g</b> y no por ración.');
+    for(const [k,a,b] of v.fixed)notes.push(`En <b>${NAMES[k]}</b> leí "${a}" pero no cuadra con las kcal; he puesto <b>${(Math.round(b*100)/100).toLocaleString('es')}</b>. Compruébalo.`);
+    if(v.mismatch)notes.push(`Los valores leídos no cuadran: con esos macros saldrían ~${v.mismatch} kcal y la etiqueta dice ${v.k}. Revisa sobre todo los campos en naranja y la proteína, la grasa y los carbohidratos.`);
+    if(v.fromKJ)notes.push('Solo encontré kJ; he calculado las kcal (kJ ÷ 4,184).');
+    if(v.k==null)notes.push('No pude leer la energía (kcal): escríbela a mano.');
+    msg.innerHTML=`<div class="${n>=5&&v.k!=null?'':'warnbox'}" style="margin-top:8px;font-size:13px">${n?`✔ He leído <b>${n} de 8</b> valores (verde = leído; naranja = no leído o dudoso).`:'No he podido leer valores en la foto.'} <b>Compáralos con la etiqueta antes de guardar</b>: el lector puede confundir algún número.${n<5?' Prueba con una foto más cercana, recta y sin reflejos.':''}</div>
+      ${notes.map(x=>`<div class="warnbox">${x}</div>`).join('')}
+      <details><summary>Ver texto leído</summary><pre>${esc(res.text)}</pre></details>`;
+    if(!$('cn').value)$('cn').focus();
+  }catch(e){msg.innerHTML=`<div class="warnbox">No se pudo leer la foto (${esc(e.message||e)}). Comprueba tu conexión la primera vez que lo uses, o rellena los datos a mano.</div>`}
 }
 function saveCustom(){
   const v=id=>$(id).value===''?null:+$(id).value, name=$('cn').value.trim();
   const f={id:'c'+Date.now(),es:name,en:'',k:v('ck'),p:v('cp')||0,c:v('cc')||0,f:v('cf')||0};
   if(!name||f.k==null){alert('Nombre y energía son obligatorios');return}
+  const empty=[['cp','proteína'],['cc','carbohidratos'],['cf','grasa']].filter(([id])=>$(id).value==='').map(x=>x[1]);
+  if(empty.length&&!confirm(`Falta: ${empty.join(', ')}. Se guardará como 0 g. ¿Continuar?`))return;
   const est=4*f.p+4*f.c+9*f.f;
   if(f.k>30&&Math.abs(est-f.k)/f.k>0.3&&!$('cwarn').dataset.ok){
     $('cwarn').dataset.ok=1;$('cwarn').innerHTML=`<div class="warnbox">Ojo: con esos macros saldrían ~${r0(est)} kcal, pero has puesto ${f.k}. Revisa la etiqueta (¿valores por ración en lugar de por 100 g?). Pulsa Guardar otra vez si está bien.</div>`;return}
